@@ -13,13 +13,16 @@ graph.readFromFile("fiveNodes.json")
 
 # print(graph.nodesArray[0])
 
-print(graph.findShortestPath(0, 5))
-# path, weight, distance = graph.findDijkstraShortestPath(0, 5)
+# print(graph.findShortestPath(0, 2))
+# path, weight, distance = graph.findDijkstraShortestPath(0, 2)
 # print(f"Кратчайший путь: {path}, Вес: {distance}")
 
-# paths = graph.dfs(0,5)
-
-# print(paths)
+# print(graph.dfs(0,5))
 # min((word for word in paths if word), key=len)
+# cycles = graph.findCycles()
+# for i in cycles:
+#     print(i)
+
+graph.info([0,1])
 
 # graphVisualizer(graph.nodesArray)
