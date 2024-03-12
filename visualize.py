@@ -15,8 +15,6 @@ def graphVisualizer(graph):
     # Создаем графический объект
     fig, ax = plt.subplots()
 
-
-
     # Рисуем вершины
     for i, vertex in enumerate(vertices):
         x, y = np.cos(2 * np.pi * i / len(vertices)), np.sin(2 * np.pi * i / len(vertices))
