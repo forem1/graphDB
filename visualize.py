@@ -3,14 +3,17 @@ import numpy as np
 
 def graphVisualizer(graph):
     vertices = []
+    verticesName = {}
     adjacency_list = {}
-    for index, node in enumerate(graph):
-        vertices.append(node[0])
-        edges = []
-        for edge in node[2]:
-            if edge:
-                edges.append(str(graph[edge[0]][0]))
-        adjacency_list[node[0]] = edges
+    edgesDirected = {}
+    for node in graph.nodes:
+        vertices.append(node.id)
+        verticesName[node.id] = node.name
+        adjacency_list[node.id] = []
+
+    for edge in graph.edges:
+        adjacency_list[edge.fromNode].append(edge.toNode)
+        edgesDirected[edge.toNode] = (edge.directed, edge.name)
 
     # Создаем графический объект
     fig, ax = plt.subplots()
@@ -18,22 +21,41 @@ def graphVisualizer(graph):
     # Рисуем вершины
     for i, vertex in enumerate(vertices):
         x, y = np.cos(2 * np.pi * i / len(vertices)), np.sin(2 * np.pi * i / len(vertices))
-        ax.plot(x, y, 'o', markersize=20, color='c')
-        # circle = plt.Circle((x, y), 0.005, color='c')
-        # ax.add_patch(circle)
-        ax.text(x, y, vertex, ha='center', va='center', fontsize=15)
+        ax.plot(x, y, 'o', markersize=40, color='c')
+        ax.text(x, y, str(verticesName[vertex]), ha='center', va='center', fontsize=10)
 
     # Рисуем ребра
     for i, vertex in enumerate(vertices):
         for neighbor in adjacency_list[vertex]:
             j = vertices.index(neighbor)
-            # dx, dy = -0.5, -0.5
-            # dx, dy = np.cos(2 * np.pi * i / len(vertices)) - np.cos(2 * np.pi * j / len(vertices)), np.sin(2 * np.pi * i / len(vertices)) - np.sin(2 * np.pi * j / len(vertices))
-            # ax.arrow(np.cos(2 * np.pi * j / len(vertices)), np.sin(2 * np.pi * j / len(vertices)), dx, dy, length_includes_head=True, width=0.001, facecolor = 'k', head_width=0.1, head_length=0.1) # color=np.random.rand(3,)
-            plt.annotate("", xy=(np.cos(2 * np.pi * j / len(vertices)), np.sin(2 * np.pi * j / len(vertices))), xytext=(np.cos(2 * np.pi * i / len(vertices)), np.sin(2 * np.pi * i / len(vertices))), arrowprops=dict(facecolor='black', width=0.5, headwidth=10, shrink=0.08))
+            if edgesDirected[neighbor][0]:
+                i = vertices.index(vertex)
+                j = vertices.index(neighbor)
+                x1, y1 = np.cos(2 * np.pi * i / len(vertices)), np.sin(2 * np.pi * i / len(vertices))
+                x2, y2 = np.cos(2 * np.pi * j / len(vertices)), np.sin(2 * np.pi * j / len(vertices))
+                x1 += 0.1 * (x2 - x1)
+                y1 += 0.1 * (y2 - y1)
+                x2 -= 0.1 * (x2 - x1)
+                y2 -= 0.1 * (y2 - y1)
+                ax.plot([x1, x2], [y1, y2], color='black', linewidth=1)
+                text_x = (x1 + x2) / 2
+                text_y = (y1 + y2) / 2
+                ax.annotate(edgesDirected[neighbor][1], xy=(x2, y2), xytext=(text_x, text_y), arrowprops=dict(arrowstyle="->"), ha='center', va='center')
+            else:
+                i = vertices.index(vertex)
+                j = vertices.index(neighbor)
+                x1, y1 = np.cos(2 * np.pi * i / len(vertices)), np.sin(2 * np.pi * i / len(vertices))
+                x2, y2 = np.cos(2 * np.pi * j / len(vertices)), np.sin(2 * np.pi * j / len(vertices))
+                x1 += 0.1 * (x2 - x1)
+                y1 += 0.1 * (y2 - y1)
+                x2 -= 0.1 * (x2 - x1)
+                y2 -= 0.1 * (y2 - y1)
+                ax.plot([x1, x2], [y1, y2], color='black', linewidth=1)
+                text_x = (x1 + x2) / 2
+                text_y = (y1 + y2) / 2
+                ax.annotate(edgesDirected[neighbor][1], xy=(x2, y2), xytext=(text_x, text_y), ha='center', va='center')
     plt.axis('off')
     plt.autoscale(False)
-    # ax.axis("equal")
 
     plt.xlim(-2, 2)
     plt.ylim(-2, 2)
