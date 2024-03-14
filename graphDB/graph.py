@@ -1,40 +1,64 @@
+import copy
 import pickle
 from collections import Counter
 from dataclasses import dataclass, field
-import json
 from uuid import uuid4, UUID
-from typing import List, Union
+from typing import Union, List
+
+@dataclass
+class Node:
+    name:str
+    id: UUID = field(default_factory=uuid4)
+    link:str = "" #сейчас строка, но может быть указатель
+    data: Union[dict, any] = field(default_factory=dict)
+
+    def findKey(self, key:str):
+            if type(self.data) is dict:
+                if key in self.data:
+                    return self.data.get(key)
+            return None
+
+    def findValue(self, value:str):
+            if type(self.data) is dict:
+                    key = {i for i in self.data if self.data[i]==value}
+                    if key != set():
+                        return key
+            return None
 
 @dataclass
 class Edge:
-    id:UUID
-    fromNode:UUID
-    toNode:UUID
+    fromNode:Union[UUID, Node]
+    toNode:Union[UUID, Node]
     name:str
+    id: UUID = field(default_factory=uuid4)
     data:dict = field(default_factory=dict)
     weight: int = 0
     directed:bool = True
 
-@dataclass
-class Node:
-    id: UUID
-    name:str
-    link:str = "" #сейчас строка, но может быть указатель
-    data: Union[dict, any] = field(default_factory=dict)
+    def __post_init__(self):
+        if isinstance(self.toNode, Node):
+            self.toNode = self.toNode.id
+        if isinstance(self.fromNode, Node):
+            self.fromNode = self.fromNode.id
 
+    def findKey(self, key:str):
+            if type(self.data) is dict:
+                if key in self.data:
+                    return self.data.get(key)
+            return None
+
+    def findValue(self, value:str):
+            if type(self.data) is dict:
+                    key = {i for i in self.data if self.data[i]==value}
+                    if key != set():
+                        return key
+            return None
 
 class Graph:
     def __init__(self, name):
         self.name = name
         self.edges = []
         self.nodes = []
-
-    def addNode(self, node: Node):
-        self.nodes.append(node)
-        return node.id
-    def addEdge(self, edge: Edge):
-        self.edges.append(edge)
-        return edge.id
 
     def save_to_file(self, path):
         with open(path, 'wb') as file:
@@ -104,11 +128,95 @@ class Graph:
             # Проверяем, является ли количество рёбер в графе равным количеству возможных рёбер для полного графа
             print(f"Is graph complete: {str(len(all_edges) == len(self.nodes) * (len(self.nodes) - 1))}")
 
+    # ----------------------------------------------------------CRUD---------------------------------------------------------
+
+    def addNode(self, node: Node):
+        if len(self.nodes) != 0:
+            for currNode in self.nodes:
+                if currNode.name != node.name:
+                    self.nodes.append(node)
+                    return node
+                else:
+                    raise Exception("Node name is exist")
+        else:
+            self.nodes.append(node)
+            return node
+    def addEdge(self, edge: Edge):
+        if len(self.edges) != 0:
+            for currEdge in self.edges:
+                if currEdge.name != edge.name:
+                    self.edges.append(edge)
+                    return edge
+                else:
+                    raise Exception("Edge name is exist")
+        else:
+            self.edges.append(edge)
+            return edge
+
+    def updateNode(self, currNode:Node, newNode:Node) -> bool:
+        for i, node in enumerate(self.nodes):
+            if node == currNode:
+                self.nodes[i] = newNode
+                return True
+        return False
+
+    def updateEdge(self, currEdge:Edge, newEdge:Edge) -> bool:
+        for i, edge in enumerate(self.edges):
+            if edge == currEdge:
+                self.edges[i] = newEdge
+                return True
+        return False
+
+    def deleteNode(self, node:Node) -> bool:
+        if not any(edge.fromNode == node.id or edge.toNode == node.id for edge in self.edges):
+            self.nodes.remove(node)
+            return True
+        else:
+            raise Exception("Node have a edges")
+
+    def deleteEdge(self, edge:Edge) -> bool:
+        self.edges.remove(edge)
+        return True
+
+    def deleteAllEdges(self, node:Node) -> bool:
+        self.edges = [edge for edge in self.edges if edge.toNode != node.id and edge.fromNode != node.id]
+        return True
+
+    def findNodeById(self, id:str) -> Node:
+        for node in self.nodes:
+            if node.id == id:
+                return node
+        return None
+
+    def findNodeByName(self, name:str) -> Node:
+        for node in self.nodes:
+            if node.name == name:
+                return node
+        return None
+
+    def findKeyInNodes(self, key:str) -> List:
+        values = []
+        for node in self.nodes:
+            if type(node.data) is dict:
+                if key in node.data:
+                    values.append([node.id, node.name, node.data.get(key)])
+        return values
+
+    def findValueInNodes(self, value:str) -> List:
+        keys = []
+        for node in self.nodes:
+            if type(node.data) is dict:
+                    key = {i for i in node.data if node.data[i]==value}
+                    if key != set():
+                        keys.append([node.id, node.name, key])
+        return keys
 
     # --------------------------------------------------------Analysis-------------------------------------------------------
     # Find the smallest edges path
-    #FIXME: не работает с неопределенными гранями
-    def findShortestPath(self, startNode, endNode, visited=None, path=None):
+    def findShortestPath(self, startNode:Union[Node, UUID], endNode:Union[Node, UUID], visited=None, path=None):
+        startNode = startNode.id if type(startNode) == Node else startNode
+        endNode = endNode.id if type(endNode) == Node else endNode
+
         if visited is None:
             visited = set()
         if path is None:
@@ -142,7 +250,10 @@ class Graph:
         return shortest_path if shortest_path else []
 
     # Depth-first search
-    def dfs(self, start, end, path=None):
+    def dfs(self, start:Union[Node, UUID], end:Union[Node, UUID], path=None):
+        start = start.id if type(start) == Node else start
+        end = end.id if type(end) == Node else end
+
         if path is None:
             path = [start]
 
@@ -199,7 +310,10 @@ class Graph:
         return cycles
 
     # Find the smallest weight path
-    def findDijkstraShortestPath(self, start, end):
+    def findDijkstraShortestPath(self, start:Union[Node, UUID], end:Union[Node, UUID]):
+        start = start.id if type(start) == Node else start
+        end = end.id if type(end) == Node else end
+
         node_indices = {node.id: index for index, node in enumerate(self.nodes)}
         distances = {node_id: float('inf') for node_id in node_indices}
         distances[start] = 0
