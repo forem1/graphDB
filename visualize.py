@@ -5,7 +5,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-class GraphPlot(dataclass):
+@dataclass
+class GraphPlot:
     graph: Graph
 
     def __init__(self):
