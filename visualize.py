@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from graph import Graph
 
 import matplotlib.pyplot as plt
@@ -8,12 +8,10 @@ import numpy as np
 @dataclass
 class GraphPlot:
     graph: Graph
-
-    def __init__(self):
-        self.vertices = []
-        self.verticesName = {}
-        self.adjacency_list = {}
-        self.edgesDirected = {}
+    vertices: list = field(default_factory=list)
+    verticesName: dict = field(default_factory=dict)
+    adjacency_list: dict = field(default_factory=dict)
+    edgesDirected: dict = field(default_factory=dict)
 
     def _prepare_plot(self):
         plt.axis("off")
@@ -33,6 +31,8 @@ class GraphPlot:
         self._draw_edges(ax)
         plt.show()
 
+    def draw(self):
+        self.__call__()
     def _prepare_data(self):
         for node in self.graph.nodes:
             self.vertices.append(node.id)
