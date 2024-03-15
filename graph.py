@@ -15,8 +15,7 @@ class Node:
 
     def findKey(self, key: str):
         if type(self.data) is dict:
-            if key in self.data:
-                return self.data.get(key)
+            return self.data.get(key)
         return None
 
     def findValue(self, value: str):
@@ -51,7 +50,7 @@ class Edge:
 
     def findValue(self, value: str):
         if type(self.data) is dict:
-            key = {i for i in self.data if self.data[i] == value}
+            key = {key for key in self.data if self.data[key] == value}
             if key != set():
                 return key
         return None
@@ -76,16 +75,16 @@ class Graph:
         if type(value) is UUID:
             for node in self.nodes:
                 if node.id == value:
-                    print(f"Info about node: {node.name}")
-                    print(f"Node id: {str(node.id)}")
+                    print(f"Info about node: {node.name}\n\nNode id: {node.id}")
+                    print(f"Node id: {node.id}")
                     print(
-                        f"Number of incoming edges: {str(sum(1 for edge in self.edges if edge.toNode == value))}"
+                        f"Number of incoming edges: {len([edge for edge in self.edges if edge.toNode == value])}"
                     )
                     print(
-                        f"Number of outgoing edges: {str(sum(1 for edge in self.edges if edge.fromNode == value))}"
+                        f"Number of outgoing edges: {len([edge for edge in self.edges if edge.fromNode == value])}"
                     )
                     if type(node.data) is dict:
-                        print(f"Number of data values: {str(len(node.data))}")
+                        print(f"Number of data values: {len(node.data)}")
                     return True
 
             for edge in self.edges:
@@ -95,22 +94,22 @@ class Graph:
                     print(f"Name of incoming node: {edge.toNode}")
                     print(f"Edge weight: {edge.weight}")
                     print(f"Is edge directed: {edge.directed}")
-                    print(f"Number of data values: {str(len(edge.data))}")
+                    print(f"Number of data values: {len(edge.data)}")
                     return True
             print("Id is not exist")
         elif type(value) is str:
             for node in self.nodes:
                 if node.name == value:
                     print(f"Info about node: {node.name}")
-                    print(f"Node id: {str(node.id)}")
+                    print(f"Node id: {node.id}")
                     print(
-                        f"Number of incoming edges: {str(sum(1 for edge in self.edges if edge.toNode == value))}"
+                        f"Number of incoming edges: {len([edge for edge in self.edges if edge.toNode == value])}"
                     )
                     print(
-                        f"Number of outgoing edges: {str(sum(1 for edge in self.edges if edge.fromNode == value))}"
+                        f"Number of outgoing edges: {len([edge for edge in self.edges if edge.fromNode == value])}"
                     )
                     if type(node.data) is dict:
-                        print(f"Number of data values: {str(len(node.data))}")
+                        print(f"Number of data values: {len(node.data)}")
                     return True
 
             for edge in self.edges:
@@ -120,7 +119,7 @@ class Graph:
                     print(f"Name of incoming node: {edge.toNode}")
                     print(f"Edge weight: {edge.weight}")
                     print(f"Is edge directed: {edge.directed}")
-                    print(f"Number of data values: {str(len(edge.data))}")
+                    print(f"Number of data values: {len(edge.data)}")
                     return True
             print("Name is not exist")
         else:
@@ -130,15 +129,15 @@ class Graph:
             all_edges = {(edge.fromNode, edge.toNode) for edge in self.edges}
             all_edges.update({(edge.toNode, edge.fromNode) for edge in self.edges})
 
-            # Считаем количество уникальных рёбер с помощью Counter
+            # Считаем количество уникальных рёбер
             edge_counter = Counter((edge.fromNode, edge.toNode) for edge in self.edges)
 
-            print(f"Number of nodes: {str(len(self.nodes))}")
-            print(f"Number of edges: {str(len(self.edges))}")
-            print(f"Number of unique edges: {str(len(edge_counter))}")
+            print(f"Number of nodes: {len(self.nodes)}")
+            print(f"Number of edges: {len(self.edges)}")
+            print(f"Number of unique edges: {len(edge_counter)}")
             # Проверяем, является ли количество рёбер в графе равным количеству возможных рёбер для полного графа
             print(
-                f"Is graph complete: {str(len(all_edges) == len(self.nodes) * (len(self.nodes) - 1))}"
+                f"Is graph complete: {len(all_edges) == len(self.nodes) * (len(self.nodes) - 1)}"
             )
 
     # ----------------------------------------------------------CRUD---------------------------------------------------------
@@ -168,16 +167,16 @@ class Graph:
             return edge
 
     def updateNode(self, currNode: Node, newNode: Node) -> bool:
-        for i, node in enumerate(self.nodes):
+        for key, node in enumerate(self.nodes):
             if node == currNode:
-                self.nodes[i] = newNode
+                self.nodes[key] = newNode
                 return True
         return False
 
     def updateEdge(self, currEdge: Edge, newEdge: Edge) -> bool:
-        for i, edge in enumerate(self.edges):
+        for key, edge in enumerate(self.edges):
             if edge == currEdge:
-                self.edges[i] = newEdge
+                self.edges[key] = newEdge
                 return True
         return False
 
@@ -217,16 +216,15 @@ class Graph:
     def findKeyInNodes(self, key: str) -> List:
         values = []
         for node in self.nodes:
-            if type(node.data) is dict:
-                if key in node.data:
-                    values.append([node.id, node.name, node.data.get(key)])
+            if type(node.data) is dict and key in node.data:
+                values.append([node.id, node.name, node.data.get(key)])
         return values
 
     def findValueInNodes(self, value: str) -> List:
         keys = []
         for node in self.nodes:
             if type(node.data) is dict:
-                key = {i for i in node.data if node.data[i] == value}
+                key = {key for key in node.data if node.data[key] == value}
                 if key != set():
                     keys.append([node.id, node.name, key])
         return keys
@@ -304,8 +302,8 @@ class Graph:
                 not edge.directed and edge.toNode == start and edge.fromNode not in path
             ):
                 new_paths = self.dfs(edge.fromNode, end, path + [edge.fromNode])
-                for p in new_paths:
-                    paths.append(p)
+                for way in new_paths:
+                    paths.append(way)
         return paths
 
     # Find all cycles in graph
@@ -318,16 +316,16 @@ class Graph:
 
         cycles = []
 
-        def dfs(v, visited, path):
-            visited[v] = True
-            path.append(v)
+        def dfs(id, visited, path):
+            visited[id] = True
+            path.append(id)
 
             # Получаем список смежных узлов из рёбер
             adjacent_nodes = set()
             for edge in self.edges:
-                if edge.fromNode == v:
+                if edge.fromNode == id:
                     adjacent_nodes.add(edge.toNode)
-                elif edge.toNode == v and not edge.directed:
+                elif edge.toNode == id and not edge.directed:
                     adjacent_nodes.add(edge.fromNode)
 
             for neighbor in adjacent_nodes:
@@ -336,14 +334,14 @@ class Graph:
                         dfs(neighbor, visited, path)
                 else:
                     # Находим цикл
-                    cycle = path[path.index(neighbor):]
+                    cycle = path[path.index(neighbor) :]
 
                     if cycle not in cycles and len(cycle) >= 3:
                         cycle.append(neighbor)
                         cycles.append(cycle)
 
             path.pop()
-            visited[v] = False
+            visited[id] = False
 
         visited = {}
 
