@@ -10,6 +10,7 @@ from graph import Node, Edge
     name_data: данные имени в формате UTF-8 строка
     link_size: размер ссылки в байтах (uint8)
     link_data: данные ссылки в формате UTF-8 строки
+    primary: первична ли нода (True - если да, False - если нет)
     data_type: тип данных (True - если data это словарь, False - если data это произвольный тип)
     data_size: размер данных в байтах (uint64)
     data_value: данные, либо словарь, либо произвольный тип
@@ -22,13 +23,13 @@ from graph import Node, Edge
     name_size: размер имени в байтах (uint8)
     name_data: данные имени в формате UTF-8 строка
     weight: вес грани (int16)
-    directed: тип данных (True - если грань ориентированная, False - если грань не ориентированная)
+    directed: ориентация грани (True - если грань ориентированная, False - если грань не ориентированная)
     data_size: размер данных в байтах (uint32)
     data_value: данные в словаре
 """
 
 
-def write_node(node: Node):
+def serialize_node(node: Node):
     # Convert name to UTF-8 bytes
     name_bytes = node.name.encode("utf-8")
     name_size = len(name_bytes)
@@ -45,12 +46,13 @@ def write_node(node: Node):
 
     # Construct binary structure
     binary_data = struct.pack(
-        f"<16sB{name_size}sB{link_size}s?Q{data_size}s",
+        f"<16sB{name_size}sB{link_size}s??Q{data_size}s",
         node.id.bytes,
         name_size,
         name_bytes,
         link_size,
         link_bytes,
+        node.primary,
         data_type,
         data_size,
         data_bytes,
@@ -59,7 +61,7 @@ def write_node(node: Node):
     return binary_data
 
 
-def read_node(file):
+def deserialize_node(file) -> Node:
     id_bytes = file.read(16)
     if not id_bytes:
         return None
@@ -69,6 +71,7 @@ def read_node(file):
     name_data = file.read(name_size).decode("utf-8")
     link_size = struct.unpack("B", file.read(1))[0]
     link_data = file.read(link_size).decode("utf-8")
+    primary = struct.unpack("?", file.read(1))[0]
     data_type = struct.unpack("?", file.read(1))[0]
     data_size = struct.unpack("Q", file.read(8))[0]
     if data_type:
@@ -81,16 +84,12 @@ def read_node(file):
         }
     else:
         data_value = file.read(data_size).decode("utf-8")
-    return {
-        "id": node_id,
-        "name": name_data,
-        "link": link_data,
-        "data_type": data_type,
-        "data": data_value,
-    }
+    return Node(
+        id=node_id, name=name_data, link=link_data, primary=primary, data=data_value
+    )
 
 
-def write_edge(edge: Edge):
+def serialize_edge(edge: Edge):
     # Convert name to UTF-8 bytes
     name_bytes = edge.name.encode("utf-8")
     name_size = len(name_bytes)
@@ -112,23 +111,10 @@ def write_edge(edge: Edge):
         data_bytes,
     )
 
-    """
-        Edge:
-        id: UUID узла, занимает 16 байт
-        from_node: UUID источника, занимает 16 байт
-        to_node: UUID приёмника, занимает 16 байт
-        name_size: размер имени в байтах (uint8)
-        name_data: данные имени в формате UTF-8 строка
-        weight: вес грани (int16)
-        directed: тип данных (True - если грань ориентированная, False - если грань не ориентированная)
-        data_size: размер данных в байтах (uint64)
-        data_value: данные в словаре
-    """
-
     return binary_data
 
 
-def read_edge(file):
+def deserialize_edge(file) -> Edge:
     id_bytes = file.read(16)
     if not id_bytes:
         return None
@@ -148,31 +134,106 @@ def read_edge(file):
             pair.split(":", 1) for pair in data_data.strip("{}").split(",")
         )
     }
-    return {
-        "id": node_id,
-        "from_node": from_node_id,
-        "to_node": to_node_id,
-        "name": name_data,
-        "weight": weight,
-        "directed": directed,
-        "data": data_value,
-    }
+    return Edge(
+        id=node_id,
+        fromNode=from_node_id,
+        toNode=to_node_id,
+        name=name_data,
+        weight=weight,
+        directed=directed,
+        data=data_value,
+    )
 
 
-# Создание нескольких объектов Node
+def write_node(file: str, nodes, position: int = -1) -> int:
+    with open(file, "ab" if position == -1 else "wb") as file:
+        if position != -1:
+            file.seek(position)
+        for node in nodes:
+            file.write(serialize_node(node))
+        return file.tell()
+
+
+def read_node(file: str, position: int = -1, elements: int = 0):
+    nodes = []
+    with open(file, "rb") as file:
+        if position != -1:
+            file.seek(position)
+        while True:
+            element = deserialize_node(file)
+            if element is None:
+                break
+            else:
+                nodes.append(element)
+
+            elements -= 1
+            if elements == 0:
+                break
+        return nodes
+
+
+def index_node(file: str, find=True):
+    index = {}
+    with open(file, "rb") as file:
+        while True:
+            element = deserialize_node(file)
+            if element is None:
+                break
+            if type(find) is uuid.UUID and element.id == find:
+                return file.tell()
+            else:
+                index[element.id] = file.tell()
+        return index
+
+
+def write_edge(file: str, edges, position: int = -1) -> int:
+    with open(file, "ab" if position == -1 else "wb") as file:
+        if position != -1:
+            file.seek(position)
+        for edge in edges:
+            file.write(serialize_edge(edge))
+        return file.tell()
+
+
+def read_edge(file: str, position: int = -1, elements: int = 0):
+    edges = []
+    with open(file, "rb") as file:
+        if position != -1:
+            file.seek(position)
+        while True:
+            element = deserialize_edge(file)
+            if element is None:
+                break
+            else:
+                edges.append(element)
+
+            elements -= 1
+            if elements == 0:
+                break
+        return edges
+
+
+def index_edge(file: str, find=True):
+    index = {}
+    with open(file, "rb") as file:
+        while True:
+            element = deserialize_edge(file)
+            if element is None:
+                break
+            if type(find) is uuid.UUID and element.id == find:
+                return file.tell()
+            else:
+                index[element.id] = file.tell()
+        return index
+
+
 nodes = [
-    # Node(id=uuid.UUID("96c68acb-e7fc-462b-ac7d-8bd71221a0d3"), name="node1", link="asddsa", data={"asda":"asd"}),
-    # Node(id=uuid.UUID("96c68acb-e7fc-462b-ac7d-8bd71221a0d3"), name="node2", link="asddsa", data="1"),
-    # Node(id=uuid.UUID("96c68acb-e7fc-462b-ac7d-8bd71221a0d3"), name="node3", link="asddsa", data="1"),
-    Node(name="node1", link="asddsa", data={"key1": "value1"}),
+    Node(name="node1", link="asddsa", primary=True, data={"key1": "value1"}),
     Node(name="node2", link="asddsa", data={"key2": "value2"}),
     Node(name="node3", link="asddsa", data={"key3": "value3"}),
 ]
 
 edges = [
-    # Node(id=uuid.UUID("96c68acb-e7fc-462b-ac7d-8bd71221a0d3"), name="node1", link="asddsa", data={"asda":"asd"}),
-    # Node(id=uuid.UUID("96c68acb-e7fc-462b-ac7d-8bd71221a0d3"), name="node2", link="asddsa", data="1"),
-    # Node(id=uuid.UUID("96c68acb-e7fc-462b-ac7d-8bd71221a0d3"), name="node3", link="asddsa", data="1"),
     Edge(
         name="edge1",
         fromNode=uuid.UUID("96c68acb-e7fc-462b-ac7d-8bd71221a0d3"),
@@ -209,29 +270,17 @@ edges = [
 
 
 def main():
-    # with open("nodes.bin", "wb") as file:
-    #     for node in nodes:
-    #         binary_data = write_node(node)
-    #         file.write(binary_data)
-    #
-    # with open("nodes.bin", "rb") as file:
-    #     while True:
-    #         element = read_node(file)
-    #         if element is None:
-    #             break
-    #         print(element)
+    print(write_node("nodes.bin", nodes, position=0))
+    read = read_node("nodes.bin")
+    print(read)
+    print(len(read))
+    print(index_node("nodes.bin"))
 
-    with open("edges.bin", "wb") as file:
-        for edge in edges:
-            binary_data = write_edge(edge)
-            file.write(binary_data)
-
-    with open("edges.bin", "rb") as file:
-        while True:
-            element = read_edge(file)
-            if element is None:
-                break
-            print(element)
+    print(write_edge("edges.bin", edges, position=0))
+    read = read_edge("edges.bin")
+    print(read)
+    print(len(read))
+    print(index_edge("edges.bin"))
 
 
 if __name__ == "__main__":

@@ -1,39 +1,41 @@
-import copy
 import pickle
 from collections import Counter
 from dataclasses import dataclass, field
 from uuid import uuid4, UUID
 from typing import Union, List
 
+
 @dataclass
 class Node:
-    name:str
+    name: str
     id: UUID = field(default_factory=uuid4)
-    link:str = "" #сейчас строка, но может быть указатель
+    link: str = ""  # сейчас строка, но может быть указатель
+    primary: bool = False
     data: Union[dict, any] = field(default_factory=dict)
 
-    def findKey(self, key:str):
-            if type(self.data) is dict:
-                if key in self.data:
-                    return self.data.get(key)
-            return None
+    def findKey(self, key: str):
+        if type(self.data) is dict:
+            if key in self.data:
+                return self.data.get(key)
+        return None
 
-    def findValue(self, value:str):
-            if type(self.data) is dict:
-                    key = {i for i in self.data if self.data[i]==value}
-                    if key != set():
-                        return key
-            return None
+    def findValue(self, value: str):
+        if type(self.data) is dict:
+            key = {i for i in self.data if self.data[i] == value}
+            if key != set():
+                return key
+        return None
+
 
 @dataclass
 class Edge:
-    fromNode:Union[UUID, Node]
-    toNode:Union[UUID, Node]
-    name:str
+    fromNode: Union[UUID, Node]
+    toNode: Union[UUID, Node]
+    name: str
     id: UUID = field(default_factory=uuid4)
-    data:dict = field(default_factory=dict)
+    data: dict = field(default_factory=dict)
     weight: int = 0
-    directed:bool = True
+    directed: bool = True
 
     def __post_init__(self):
         if isinstance(self.toNode, Node):
@@ -41,18 +43,19 @@ class Edge:
         if isinstance(self.fromNode, Node):
             self.fromNode = self.fromNode.id
 
-    def findKey(self, key:str):
-            if type(self.data) is dict:
-                if key in self.data:
-                    return self.data.get(key)
-            return None
+    def findKey(self, key: str):
+        if type(self.data) is dict:
+            if key in self.data:
+                return self.data.get(key)
+        return None
 
-    def findValue(self, value:str):
-            if type(self.data) is dict:
-                    key = {i for i in self.data if self.data[i]==value}
-                    if key != set():
-                        return key
-            return None
+    def findValue(self, value: str):
+        if type(self.data) is dict:
+            key = {i for i in self.data if self.data[i] == value}
+            if key != set():
+                return key
+        return None
+
 
 class Graph:
     def __init__(self, name):
@@ -61,12 +64,12 @@ class Graph:
         self.nodes = []
 
     def save_to_file(self, path):
-        with open(path, 'wb') as file:
+        with open(path, "wb") as file:
             pickle.dump(self, file)
 
     @classmethod
     def read_from_file(cls, path):
-        with open(path, 'rb') as file:
+        with open(path, "rb") as file:
             return pickle.load(file)
 
     def print_info(self, value=True):
@@ -75,8 +78,12 @@ class Graph:
                 if node.id == value:
                     print(f"Info about node: {node.name}")
                     print(f"Node id: {str(node.id)}")
-                    print(f"Number of incoming edges: {str(sum(1 for edge in self.edges if edge.toNode == value))}")
-                    print(f"Number of outgoing edges: {str(sum(1 for edge in self.edges if edge.fromNode == value))}")
+                    print(
+                        f"Number of incoming edges: {str(sum(1 for edge in self.edges if edge.toNode == value))}"
+                    )
+                    print(
+                        f"Number of outgoing edges: {str(sum(1 for edge in self.edges if edge.fromNode == value))}"
+                    )
                     if type(node.data) is dict:
                         print(f"Number of data values: {str(len(node.data))}")
                     return True
@@ -96,8 +103,12 @@ class Graph:
                 if node.name == value:
                     print(f"Info about node: {node.name}")
                     print(f"Node id: {str(node.id)}")
-                    print(f"Number of incoming edges: {str(sum(1 for edge in self.edges if edge.toNode == value))}")
-                    print(f"Number of outgoing edges: {str(sum(1 for edge in self.edges if edge.fromNode == value))}")
+                    print(
+                        f"Number of incoming edges: {str(sum(1 for edge in self.edges if edge.toNode == value))}"
+                    )
+                    print(
+                        f"Number of outgoing edges: {str(sum(1 for edge in self.edges if edge.fromNode == value))}"
+                    )
                     if type(node.data) is dict:
                         print(f"Number of data values: {str(len(node.data))}")
                     return True
@@ -115,7 +126,7 @@ class Graph:
         else:
             print(f"Info about graph: {self.name}")
 
-            #Создаем множество всех возможных рёбер
+            # Создаем множество всех возможных рёбер
             all_edges = {(edge.fromNode, edge.toNode) for edge in self.edges}
             all_edges.update({(edge.toNode, edge.fromNode) for edge in self.edges})
 
@@ -126,75 +137,82 @@ class Graph:
             print(f"Number of edges: {str(len(self.edges))}")
             print(f"Number of unique edges: {str(len(edge_counter))}")
             # Проверяем, является ли количество рёбер в графе равным количеству возможных рёбер для полного графа
-            print(f"Is graph complete: {str(len(all_edges) == len(self.nodes) * (len(self.nodes) - 1))}")
+            print(
+                f"Is graph complete: {str(len(all_edges) == len(self.nodes) * (len(self.nodes) - 1))}"
+            )
 
     # ----------------------------------------------------------CRUD---------------------------------------------------------
 
     def addNode(self, node: Node):
         if len(self.nodes) != 0:
             for currNode in self.nodes:
-                if currNode.name != node.name:
-                    self.nodes.append(node)
-                    return node
-                else:
-                    raise Exception("Node name is exist")
-        else:
-            self.nodes.append(node)
-            return node
+                if currNode.name == node.name:
+                    raise Exception("Node name already exists")
+                if currNode.primary and node.primary:
+                    raise Exception("Both existing and new nodes are primary")
+        self.nodes.append(node)
+        return node
+
     def addEdge(self, edge: Edge):
         if len(self.edges) != 0:
             for currEdge in self.edges:
-                if currEdge.name != edge.name:
-                    self.edges.append(edge)
-                    return edge
-                else:
-                    raise Exception("Edge name is exist")
-        else:
-            self.edges.append(edge)
-            return edge
+                if currEdge.name == edge.name:
+                    raise Exception("Edge name already exists")
+        self.edges.append(edge)
+        return edge
 
-    def updateNode(self, currNode:Node, newNode:Node) -> bool:
+    def updateNode(
+        self, currNode: Node, newNode: Node
+    ) -> bool:  # TODO:Add check on existing name and primary. Or totally rewrite
         for i, node in enumerate(self.nodes):
             if node == currNode:
                 self.nodes[i] = newNode
                 return True
         return False
 
-    def updateEdge(self, currEdge:Edge, newEdge:Edge) -> bool:
+    def updateEdge(
+        self, currEdge: Edge, newEdge: Edge
+    ) -> bool:  # TODO:Add check on existing name. Or totally rewrite
         for i, edge in enumerate(self.edges):
             if edge == currEdge:
                 self.edges[i] = newEdge
                 return True
         return False
 
-    def deleteNode(self, node:Node) -> bool:
-        if not any(edge.fromNode == node.id or edge.toNode == node.id for edge in self.edges):
+    def deleteNode(self, node: Node) -> bool:
+        if not any(
+            edge.fromNode == node.id or edge.toNode == node.id for edge in self.edges
+        ):
             self.nodes.remove(node)
             return True
         else:
             raise Exception("Node have a edges")
 
-    def deleteEdge(self, edge:Edge) -> bool:
+    def deleteEdge(self, edge: Edge) -> bool:
         self.edges.remove(edge)
         return True
 
-    def deleteAllEdges(self, node:Node) -> bool:
-        self.edges = [edge for edge in self.edges if edge.toNode != node.id and edge.fromNode != node.id]
+    def deleteAllEdges(self, node: Node) -> bool:
+        self.edges = [
+            edge
+            for edge in self.edges
+            if edge.toNode != node.id and edge.fromNode != node.id
+        ]
         return True
 
-    def findNodeById(self, id:str) -> Node:
+    def findNodeById(self, id: str) -> Node:
         for node in self.nodes:
             if node.id == id:
                 return node
         return None
 
-    def findNodeByName(self, name:str) -> Node:
+    def findNodeByName(self, name: str) -> Node:
         for node in self.nodes:
             if node.name == name:
                 return node
         return None
 
-    def findKeyInNodes(self, key:str) -> List:
+    def findKeyInNodes(self, key: str) -> List:
         values = []
         for node in self.nodes:
             if type(node.data) is dict:
@@ -202,18 +220,24 @@ class Graph:
                     values.append([node.id, node.name, node.data.get(key)])
         return values
 
-    def findValueInNodes(self, value:str) -> List:
+    def findValueInNodes(self, value: str) -> List:
         keys = []
         for node in self.nodes:
             if type(node.data) is dict:
-                    key = {i for i in node.data if node.data[i]==value}
-                    if key != set():
-                        keys.append([node.id, node.name, key])
+                key = {i for i in node.data if node.data[i] == value}
+                if key != set():
+                    keys.append([node.id, node.name, key])
         return keys
 
     # --------------------------------------------------------Analysis-------------------------------------------------------
     # Find the smallest edges path
-    def findShortestPath(self, startNode:Union[Node, UUID], endNode:Union[Node, UUID], visited=None, path=None):
+    def findShortestPath(
+        self,
+        startNode: Union[Node, UUID],
+        endNode: Union[Node, UUID],
+        visited=None,
+        path=None,
+    ):
         startNode = startNode.id if type(startNode) == Node else startNode
         endNode = endNode.id if type(endNode) == Node else endNode
 
@@ -226,23 +250,31 @@ class Graph:
             return path
 
         shortest_path = None
-        shortest_path_length = float('inf')
+        shortest_path_length = float("inf")
 
         for edge in self.edges:
             if edge.fromNode == startNode and edge.toNode not in visited:
                 new_path = path + [edge.toNode]
                 new_visited = visited.copy()
                 new_visited.add(edge.toNode)
-                found_path = self.findShortestPath(edge.toNode, endNode, new_visited, new_path)
+                found_path = self.findShortestPath(
+                    edge.toNode, endNode, new_visited, new_path
+                )
                 if found_path and len(found_path) < shortest_path_length:
                     shortest_path = found_path
                     shortest_path_length = len(found_path)
 
-            elif not edge.directed and edge.toNode == startNode and edge.fromNode not in visited:
+            elif (
+                not edge.directed
+                and edge.toNode == startNode
+                and edge.fromNode not in visited
+            ):
                 new_path = path + [edge.fromNode]
                 new_visited = visited.copy()
                 new_visited.add(edge.fromNode)
-                found_path = self.findShortestPath(edge.fromNode, endNode, new_visited, new_path)
+                found_path = self.findShortestPath(
+                    edge.fromNode, endNode, new_visited, new_path
+                )
                 if found_path and len(found_path) < shortest_path_length:
                     shortest_path = found_path
                     shortest_path_length = len(found_path)
@@ -250,7 +282,7 @@ class Graph:
         return shortest_path if shortest_path else []
 
     # Depth-first search
-    def dfs(self, start:Union[Node, UUID], end:Union[Node, UUID], path=None):
+    def dfs(self, start: Union[Node, UUID], end: Union[Node, UUID], path=None):
         start = start.id if type(start) == Node else start
         end = end.id if type(end) == Node else end
 
@@ -291,7 +323,7 @@ class Graph:
                         dfs(neighbor, visited, path)
                 else:
                     # Находим цикл
-                    cycle = path[path.index(neighbor):]
+                    cycle = path[path.index(neighbor) :]
 
                     if cycle not in cycles and len(cycle) >= 3:
                         cycle.append(neighbor)
@@ -310,12 +342,12 @@ class Graph:
         return cycles
 
     # Find the smallest weight path
-    def findDijkstraShortestPath(self, start:Union[Node, UUID], end:Union[Node, UUID]):
+    def findDijkstraShortestPath(self, start: Union[Node, UUID], end: Union[Node, UUID]):
         start = start.id if type(start) == Node else start
         end = end.id if type(end) == Node else end
 
         node_indices = {node.id: index for index, node in enumerate(self.nodes)}
-        distances = {node_id: float('inf') for node_id in node_indices}
+        distances = {node_id: float("inf") for node_id in node_indices}
         distances[start] = 0
 
         for i in range(len(self.nodes) - 1):
@@ -342,7 +374,11 @@ class Graph:
                     path.append(src)
                     weights.append(weight)
                     break
-                if not edge.directed and src == path[-1] and distances[dest] + weight == distances[path[-1]]:
+                if (
+                    not edge.directed
+                    and src == path[-1]
+                    and distances[dest] + weight == distances[path[-1]]
+                ):
                     path.append(dest)
                     weights.append(weight)
                     break
