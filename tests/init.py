@@ -1,5 +1,7 @@
+import uuid
+
 from graph import Graph, Node, Edge
-from visualize import graphVisualizer
+from visualize import GraphPlot
 from time import perf_counter_ns
 
 graph = Graph("test")
@@ -85,6 +87,7 @@ start = perf_counter_ns()
 
 print("ms: " + str((perf_counter_ns() - start) / 1000))
 
-graphVisualizer(graph)
+plot = GraphPlot(graph=graph)
+plot.draw()
 
 # TODO: проверить отрисовку графа, иногда не рисует стрелки (big.db)
