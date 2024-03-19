@@ -1,3 +1,4 @@
+import os
 import struct
 import uuid
 from time import perf_counter_ns, perf_counter
@@ -155,6 +156,17 @@ def deserialize_edge(file) -> Edge:
     )
 
 
+def _pass_zero_bytes(file):
+    while True:
+        byte = file.read(1)
+        if not byte:
+            break
+        if byte != b"\x00":
+            file.seek(-1, 1)
+            break
+    return file
+
+
 def write_nodes(filename: str, nodes, position: int = -1) -> int:
     with open(filename, "ab" if position == -1 else "wb") as file:
         if position != -1:
@@ -170,13 +182,7 @@ def read_nodes(filename: str, position: int = -1, elements: int = 0) -> List[Nod
         if position != -1:
             file.seek(position)
         while True:
-            while True:  # Search deleted objects and pass them
-                byte = file.read(1)
-                if not byte:
-                    break
-                if byte != b"\x00":
-                    file.seek(-1, 1)
-                    break
+            file = _pass_zero_bytes(file)
             element = deserialize_node(file)
             if element is None:
                 break
@@ -193,6 +199,7 @@ def index_nodes(filename: str, find=None) -> Union[int, Dict[uuid.UUID, int]]:
     index = {}
     with open(filename, "rb") as file:
         while True:
+            file = _pass_zero_bytes(file)
             element_start = file.tell()  # Запоминаем начало структуры
             element = deserialize_node(file)
             if element is None:
@@ -200,25 +207,22 @@ def index_nodes(filename: str, find=None) -> Union[int, Dict[uuid.UUID, int]]:
             if isinstance(find, uuid.UUID) and element.id == find:
                 return element_start
             else:
-                index[element.id] = element_start
+                index[element.id] = (element_start, file.tell())
         return index
 
 
 def delete_node(filename: str, find: Union[int, uuid.UUID]):
     index = index_nodes(filename)
-    print(index)
 
     start = 0
     end = 0
+
     if isinstance(find, int):
         start = find
-        end = min({value for value in index.values() if value > find}, default=None)
+        end = min({value for value in index.values() if value[0] > find}, default=None)[0]
     elif isinstance(find, uuid.UUID) and find in index:
-        start = index[find]
-        end = min({value for value in index.values() if value > start}, default=None)
-
-    print(start)
-    print(end)
+        start = index[find][0]
+        end = index[find][1]
 
     with open(filename, "r+b") as file:  # Открываем файл для чтения и записи
         file.seek(start)
@@ -232,6 +236,20 @@ def delete_node(filename: str, find: Union[int, uuid.UUID]):
 
         for _ in range(interval_size):
             file.write(struct.pack("B", 0))
+
+
+def defragment_nodes(filename: str):
+    index = index_nodes(filename)
+
+    output_filename = f"temp_{filename}"
+    with open(filename, "rb") as input_file:
+        with open(output_filename, "wb") as output_file:
+            for start, end in index.values():
+                input_file.seek(start)
+                output_file.write(input_file.read(end - start))
+
+    os.remove(filename)
+    os.rename(output_filename, filename)
 
 
 def write_edges(filename: str, edges, position: int = -1) -> int:
@@ -254,7 +272,6 @@ def read_edges(filename: str, position: int = -1, elements: int = 0) -> List[Edg
                 break
             else:
                 edges.append(element)
-
             elements -= 1
             if elements == 0:
                 break
@@ -265,6 +282,7 @@ def index_edges(filename: str, find=None) -> Union[int, Dict[uuid.UUID, int]]:
     index = {}
     with open(filename, "rb") as file:
         while True:
+            file = _pass_zero_bytes(file)
             element_start = file.tell()  # Запоминаем начало структуры
             element = deserialize_edge(file)
             if element is None:
@@ -272,8 +290,49 @@ def index_edges(filename: str, find=None) -> Union[int, Dict[uuid.UUID, int]]:
             if isinstance(find, uuid.UUID) and element.id == find:
                 return element_start
             else:
-                index[element.id] = element_start
+                index[element.id] = (element_start, file.tell())
         return index
+
+
+def delete_edge(filename: str, find: Union[int, uuid.UUID]):
+    index = index_edges(filename)
+
+    start = 0
+    end = 0
+
+    if isinstance(find, int):
+        start = find
+        end = min({value for value in index.values() if value[0] > find}, default=None)[0]
+    elif isinstance(find, uuid.UUID) and find in index:
+        start = index[find][0]
+        end = index[find][1]
+
+    with open(filename, "r+b") as file:  # Открываем файл для чтения и записи
+        file.seek(start)
+
+        if end is not None:
+            interval_size = end - start
+        else:
+            file.seek(0, 2)  # Переходим в конец файла
+            file_size = file.tell()  # Получаем текущий размер файла
+            interval_size = file_size - start
+
+        for _ in range(interval_size):
+            file.write(struct.pack("B", 0))
+
+
+def defragment_edges(filename: str):
+    index = index_edges(filename)
+
+    output_filename = f"temp_{filename}"
+    with open(filename, "rb") as input_file:
+        with open(output_filename, "wb") as output_file:
+            for start, end in index.values():
+                input_file.seek(start)
+                output_file.write(input_file.read(end - start))
+
+    os.remove(filename)
+    os.rename(output_filename, filename)
 
 
 nodes = [
@@ -287,20 +346,26 @@ nodes = [
     Node(
         id=uuid.UUID("e134f354-3283-4f0b-94d9-fec9fcd737c2"),
         name="node2",
-        link="asdd",
+        link="asddsa",
         data={"key2": "value2"},
     ),
     Node(
         id=uuid.UUID("602ffb44-fa16-460b-a24d-fadff449dc08"),
         name="node3",
-        link="asdsa",
+        link="asddsa",
+        data={"key3": "value3"},
+    ),
+    Node(
+        id=uuid.UUID("602ffb44-fa16-463b-a24d-fadff449dc08"),
+        name="node4",
+        link="asddsa",
         data={"key3": "value3"},
     ),
 ]
-# nodes = []
 
 edges = [
     Edge(
+        id=uuid.UUID("602ffb44-fa16-463b-a24d-fadff449dc08"),
         name="edge1",
         fromNode=uuid.UUID("96c68acb-e7fc-462b-ac7d-8bd71221a0d3"),
         toNode=uuid.UUID("96c68acb-e7fc-462b-ac7d-81d71221a0d3"),
@@ -309,14 +374,16 @@ edges = [
         data={"key1": "value1"},
     ),
     Edge(
+        id=uuid.UUID("602ffb44-fa16-463b-a24d-fadff449dc09"),
         name="edge2",
         fromNode=uuid.UUID("96c68acb-e7fc-462b-ac7d-8bd71221a0d3"),
         toNode=uuid.UUID("96c68acb-e7fc-462b-ac7d-8bd71221a0d3"),
         weight=111,
         directed=True,
-        data={"key1": "valufdgdfe1"},
+        data={"key1": "value1"},
     ),
     Edge(
+        id=uuid.UUID("602ffb44-fa16-463b-a24d-fadff449dc10"),
         name="edge2",
         fromNode=uuid.UUID("96c68acb-e7fc-462b-ac7d-8bd71221a0d3"),
         toNode=uuid.UUID("96c68acb-e7fc-462b-ac7d-8bd71221a0d3"),
@@ -325,6 +392,7 @@ edges = [
         data={"key1": "value1"},
     ),
     Edge(
+        id=uuid.UUID("602ffb44-fa16-463b-a24d-fadff449dc11"),
         name="edge3",
         fromNode=uuid.UUID("96c68acb-e7fc-462b-ac7d-8bd71221a0d3"),
         toNode=uuid.UUID("96c68acb-e7fc-462b-ac7d-8bd71221a0d3"),
@@ -336,40 +404,25 @@ edges = [
 
 
 def main():
-    # for i in range(10000):
-    #     nodes.append(
-    #         Node(
-    #             name=i,
-    #             link=f"link{i}",
-    #             data={
-    #                 "key1": i,
-    #                 "key2": i,
-    #                 "key3": i,
-    #                 "key4": i,
-    #                 "key5": i,
-    #                 "key6": i,
-    #                 "key7": i,
-    #                 "key8": i,
-    #                 "key9": i,
-    #                 "key10": i,
-    #             },
-    #         )
-    #     )
-
-    write = write_nodes("nodes.bin", nodes, position=0)
-    read = read_nodes("nodes.bin")
-    delete = delete_node("nodes.bin", find=56)
-    read = read_nodes("nodes.bin")
-    # print(write)
-    print(read)
-    print(len(read))
-    # print(index_nodes("nodes.bin"))
-
-    # print(write_edge("edges.bin", edges, position=0))
-    # read = read_edge("edges.bin")
+    # write = write_nodes("nodes.bin", nodes, position=0)
+    # read = read_nodes("nodes.bin")
+    # delete_node("nodes.bin", find=56)
+    # read = read_nodes("nodes.bin")
+    # # print(write)
     # print(read)
     # print(len(read))
-    # print(index_edge("edges.bin"))
+    # defragment_nodes("nodes.bin")
+    # print(index_nodes("nodes.bin"))
+
+    print(write_edges("edges.bin", edges, position=0))
+    # read = read_edges("edges.bin")
+    # print(read)
+    # print(len(read))
+    print(index_edges("edges.bin"))
+    delete_edge("edges.bin", find=uuid.UUID("602ffb44-fa16-463b-a24d-fadff449dc09"))
+    print(index_edges("edges.bin"))
+    defragment_edges("edges.bin")
+    print(index_edges("edges.bin"))
 
 
 if __name__ == "__main__":
