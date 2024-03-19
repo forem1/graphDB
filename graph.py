@@ -64,7 +64,7 @@ class Graph:
         with open(path, "rb") as file:
             return pickle.load(file)
 
-    def print_info(self, value=True):
+    def print_info(self, value):
         if type(value) is UUID:
             for node in self.nodes:
                 if node.id == value:
