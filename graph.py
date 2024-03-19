@@ -11,17 +11,14 @@ class Node:
     name: str
     id: UUID = field(default_factory=uuid4)
     link: str = ""  # сейчас строка, но может быть указатель
-    data: Union[dict, any] = field(default_factory=dict)
+    data: dict = field(default_factory=dict)
 
-    def findKey(self, key: str):
-        if type(self.data) is dict:
-            return self.data.get(key)
-        return None
-
-    def findValue(self, value: str):
-        if type(self.data) is dict:
-            key = {i for i in self.data if self.data[i] == value}
-            if key != set():
+    def find(self, **args):
+        if 'key' in args:
+            return self.data.get(args['key'], None)
+        if 'value' in args:
+            key = {i for i in self.data if self.data[i] == args['value']}
+            if key:
                 return key
         return None
 
@@ -42,16 +39,12 @@ class Edge:
         if isinstance(self.fromNode, Node):
             self.fromNode = self.fromNode.id
 
-    def findKey(self, key: str):
-        if type(self.data) is dict:
-            if key in self.data:
-                return self.data.get(key)
-        return None
-
-    def findValue(self, value: str):
-        if type(self.data) is dict:
-            key = {key for key in self.data if self.data[key] == value}
-            if key != set():
+    def find(self, **args):
+        if 'key' in args:
+            return self.data.get(args['key'], None)
+        if 'value' in args:
+            key = {key for key in self.data if self.data[key] == args['value']}
+            if key:
                 return key
         return None
 
