@@ -1,5 +1,7 @@
 import struct
 import uuid
+from time import perf_counter_ns, perf_counter
+from typing import List, Union, Dict, Optional
 
 from graph import Node, Edge
 
@@ -29,13 +31,13 @@ from graph import Node, Edge
 """
 
 
-def serialize_node(node: Node):
+def serialize_node(node: Node) -> bytes:
     # Convert name to UTF-8 bytes
-    name_bytes = node.name.encode("utf-8")
+    name_bytes = str(node.name).encode("utf-8")
     name_size = len(name_bytes)
 
     # Convert link to UTF-8 bytes
-    link_bytes = node.link.encode("utf-8")
+    link_bytes = str(node.link).encode("utf-8")
     link_size = len(link_bytes)
 
     # Determine data type (1 for dictionary, 0 for other types)
@@ -76,12 +78,16 @@ def deserialize_node(file) -> Node:
     data_size = struct.unpack("Q", file.read(8))[0]
     if data_type:
         data_data = file.read(data_size).decode("utf-8")
-        data_value = {
-            key.strip("'\""): value.strip("'\" ")
-            for key, value in (
-                pair.split(":", 1) for pair in data_data.strip("{}").split(",")
-            )
-        }
+        data_value = (
+            {}
+            if data_data == "{}"
+            else {
+                key.strip("'\""): value.strip("'\" ")
+                for key, value in (
+                    pair.split(":", 1) for pair in data_data.strip("{}").split(",")
+                )
+            }
+        )
     else:
         data_value = file.read(data_size).decode("utf-8")
     return Node(
@@ -89,9 +95,9 @@ def deserialize_node(file) -> Node:
     )
 
 
-def serialize_edge(edge: Edge):
+def serialize_edge(edge: Edge) -> bytes:
     # Convert name to UTF-8 bytes
-    name_bytes = edge.name.encode("utf-8")
+    name_bytes = str(edge.name).encode("utf-8")
     name_size = len(name_bytes)
 
     data_bytes = str(edge.data).replace(" ", "").encode("utf-8")
@@ -128,12 +134,16 @@ def deserialize_edge(file) -> Edge:
     directed = struct.unpack("?", file.read(1))[0]
     data_size = struct.unpack("I", file.read(4))[0]
     data_data = file.read(data_size).decode("utf-8")
-    data_value = {
-        key.strip("'\""): value.strip("'\" ")
-        for key, value in (
-            pair.split(":", 1) for pair in data_data.strip("{}").split(",")
-        )
-    }
+    data_value = (
+        {}
+        if data_data == "{}"
+        else {
+            key.strip("'\""): value.strip("'\" ")
+            for key, value in (
+                pair.split(":", 1) for pair in data_data.strip("{}").split(",")
+            )
+        }
+    )
     return Edge(
         id=node_id,
         fromNode=from_node_id,
@@ -145,8 +155,8 @@ def deserialize_edge(file) -> Edge:
     )
 
 
-def write_node(file: str, nodes, position: int = -1) -> int:
-    with open(file, "ab" if position == -1 else "wb") as file:
+def write_nodes(filename: str, nodes, position: int = -1) -> int:
+    with open(filename, "ab" if position == -1 else "wb") as file:
         if position != -1:
             file.seek(position)
         for node in nodes:
@@ -154,12 +164,19 @@ def write_node(file: str, nodes, position: int = -1) -> int:
         return file.tell()
 
 
-def read_node(file: str, position: int = -1, elements: int = 0):
+def read_nodes(filename: str, position: int = -1, elements: int = 0) -> List[Node]:
     nodes = []
-    with open(file, "rb") as file:
+    with open(filename, "rb") as file:
         if position != -1:
             file.seek(position)
         while True:
+            while True:  # Search deleted objects and pass them
+                byte = file.read(1)
+                if not byte:
+                    break
+                if byte != b"\x00":
+                    file.seek(-1, 1)
+                    break
             element = deserialize_node(file)
             if element is None:
                 break
@@ -172,22 +189,53 @@ def read_node(file: str, position: int = -1, elements: int = 0):
         return nodes
 
 
-def index_node(file: str, find=True):
+def index_nodes(filename: str, find=None) -> Union[int, Dict[uuid.UUID, int]]:
     index = {}
-    with open(file, "rb") as file:
+    with open(filename, "rb") as file:
         while True:
+            element_start = file.tell()  # Запоминаем начало структуры
             element = deserialize_node(file)
             if element is None:
                 break
-            if type(find) is uuid.UUID and element.id == find:
-                return file.tell()
+            if isinstance(find, uuid.UUID) and element.id == find:
+                return element_start
             else:
-                index[element.id] = file.tell()
+                index[element.id] = element_start
         return index
 
 
-def write_edge(file: str, edges, position: int = -1) -> int:
-    with open(file, "ab" if position == -1 else "wb") as file:
+def delete_node(filename: str, find: Union[int, uuid.UUID]):
+    index = index_nodes(filename)
+    print(index)
+
+    start = 0
+    end = 0
+    if isinstance(find, int):
+        start = find
+        end = min({value for value in index.values() if value > find}, default=None)
+    elif isinstance(find, uuid.UUID) and find in index:
+        start = index[find]
+        end = min({value for value in index.values() if value > start}, default=None)
+
+    print(start)
+    print(end)
+
+    with open(filename, "r+b") as file:  # Открываем файл для чтения и записи
+        file.seek(start)
+
+        if end is not None:
+            interval_size = end - start
+        else:
+            file.seek(0, 2)  # Переходим в конец файла
+            file_size = file.tell()  # Получаем текущий размер файла
+            interval_size = file_size - start
+
+        for _ in range(interval_size):
+            file.write(struct.pack("B", 0))
+
+
+def write_edges(filename: str, edges, position: int = -1) -> int:
+    with open(filename, "ab" if position == -1 else "wb") as file:
         if position != -1:
             file.seek(position)
         for edge in edges:
@@ -195,9 +243,9 @@ def write_edge(file: str, edges, position: int = -1) -> int:
         return file.tell()
 
 
-def read_edge(file: str, position: int = -1, elements: int = 0):
+def read_edges(filename: str, position: int = -1, elements: int = 0) -> List[Edge]:
     edges = []
-    with open(file, "rb") as file:
+    with open(filename, "rb") as file:
         if position != -1:
             file.seek(position)
         while True:
@@ -213,25 +261,43 @@ def read_edge(file: str, position: int = -1, elements: int = 0):
         return edges
 
 
-def index_edge(file: str, find=True):
+def index_edges(filename: str, find=None) -> Union[int, Dict[uuid.UUID, int]]:
     index = {}
-    with open(file, "rb") as file:
+    with open(filename, "rb") as file:
         while True:
+            element_start = file.tell()  # Запоминаем начало структуры
             element = deserialize_edge(file)
             if element is None:
                 break
-            if type(find) is uuid.UUID and element.id == find:
-                return file.tell()
+            if isinstance(find, uuid.UUID) and element.id == find:
+                return element_start
             else:
-                index[element.id] = file.tell()
+                index[element.id] = element_start
         return index
 
 
 nodes = [
-    Node(name="node1", link="asddsa", primary=True, data={"key1": "value1"}),
-    Node(name="node2", link="asddsa", data={"key2": "value2"}),
-    Node(name="node3", link="asddsa", data={"key3": "value3"}),
+    Node(
+        id=uuid.UUID("7944f8b4-04a6-43d2-b253-46c61fec2e8d"),
+        name="node1",
+        link="asddsa",
+        primary=True,
+        data={"key1": "value1"},
+    ),
+    Node(
+        id=uuid.UUID("e134f354-3283-4f0b-94d9-fec9fcd737c2"),
+        name="node2",
+        link="asdd",
+        data={"key2": "value2"},
+    ),
+    Node(
+        id=uuid.UUID("602ffb44-fa16-460b-a24d-fadff449dc08"),
+        name="node3",
+        link="asdsa",
+        data={"key3": "value3"},
+    ),
 ]
+# nodes = []
 
 edges = [
     Edge(
@@ -270,17 +336,40 @@ edges = [
 
 
 def main():
-    print(write_node("nodes.bin", nodes, position=0))
-    read = read_node("nodes.bin")
-    print(read)
-    print(len(read))
-    print(index_node("nodes.bin"))
+    # for i in range(10000):
+    #     nodes.append(
+    #         Node(
+    #             name=i,
+    #             link=f"link{i}",
+    #             data={
+    #                 "key1": i,
+    #                 "key2": i,
+    #                 "key3": i,
+    #                 "key4": i,
+    #                 "key5": i,
+    #                 "key6": i,
+    #                 "key7": i,
+    #                 "key8": i,
+    #                 "key9": i,
+    #                 "key10": i,
+    #             },
+    #         )
+    #     )
 
-    print(write_edge("edges.bin", edges, position=0))
-    read = read_edge("edges.bin")
+    write = write_nodes("nodes.bin", nodes, position=0)
+    read = read_nodes("nodes.bin")
+    delete = delete_node("nodes.bin", find=56)
+    read = read_nodes("nodes.bin")
+    # print(write)
     print(read)
     print(len(read))
-    print(index_edge("edges.bin"))
+    # print(index_nodes("nodes.bin"))
+
+    # print(write_edge("edges.bin", edges, position=0))
+    # read = read_edge("edges.bin")
+    # print(read)
+    # print(len(read))
+    # print(index_edge("edges.bin"))
 
 
 if __name__ == "__main__":
