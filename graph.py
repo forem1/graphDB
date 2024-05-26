@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from uuid import uuid4, UUID
 from typing import Union, List
 
-
 @dataclass
 class Node:
     name: str
@@ -164,7 +163,7 @@ class Graph:
     def updateNode(
         self, currNode: Node, newNode: Node
     ) -> bool:  # TODO:Add check on existing name and primary. Or totally rewrite
-        for i, node in enumerate(self.nodes):
+        for key, node in enumerate(self.nodes):
             if node == currNode:
                 self.nodes[key] = newNode
                 return True
@@ -173,7 +172,7 @@ class Graph:
     def updateEdge(
         self, currEdge: Edge, newEdge: Edge
     ) -> bool:  # TODO:Add check on existing name. Or totally rewrite
-        for i, edge in enumerate(self.edges):
+        for key, edge in enumerate(self.edges):
             if edge == currEdge:
                 self.edges[key] = newEdge
                 return True
@@ -393,3 +392,43 @@ class Graph:
                     weights.append(weight)
                     break
         return list(reversed(path)), weights, sum(weights)
+
+    # --------------------------------------------------------Tools-------------------------------------------------------
+    def graph_to_adjacency_matrix(self) -> List[List[int]]:
+        # Create a mapping from node id to index
+        node_indices = {node.id: idx for idx, node in enumerate(self.nodes)}
+        size = len(self.nodes)
+
+        # Initialize an empty adjacency matrix
+        adjacency_matrix = [[0] * size for _ in range(size)]
+
+        # Fill the adjacency matrix
+        for edge in self.edges:
+            from_idx = node_indices[edge.fromNode]
+            to_idx = node_indices[edge.toNode]
+            adjacency_matrix[from_idx][to_idx] = 1
+            if not edge.directed:
+                adjacency_matrix[to_idx][from_idx] = 1
+
+        return adjacency_matrix
+
+    def graph_to_incidence_matrix(self) -> List[List[int]]:
+        # Create a mapping from node id to index
+        node_indices = {node.id: idx for idx, node in enumerate(self.nodes)}
+        size_nodes = len(self.nodes)
+        size_edges = len(self.edges)
+
+        # Initialize an empty incidence matrix
+        incidence_matrix = [[0] * size_edges for _ in range(size_nodes)]
+
+        # Fill the incidence matrix
+        for j, edge in enumerate(self.edges):
+            from_idx = node_indices[edge.fromNode]
+            to_idx = node_indices[edge.toNode]
+            incidence_matrix[from_idx][j] = 1
+            if edge.directed:
+                incidence_matrix[to_idx][j] = -1
+            else:
+                incidence_matrix[to_idx][j] = 1
+
+        return incidence_matrix
