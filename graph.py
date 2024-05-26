@@ -1,4 +1,3 @@
-import copy
 import pickle
 from collections import Counter
 from dataclasses import dataclass, field
@@ -11,11 +10,13 @@ class Node:
     name: str
     id: UUID = field(default_factory=uuid4)
     link: str = ""  # сейчас строка, но может быть указатель
+    primary: bool = False
     data: Union[dict, any] = field(default_factory=dict)
 
     def findKey(self, key: str):
         if type(self.data) is dict:
-            return self.data.get(key)
+            if key in self.data:
+                return self.data.get(key)
         return None
 
     def findValue(self, value: str):
@@ -50,7 +51,7 @@ class Edge:
 
     def findValue(self, value: str):
         if type(self.data) is dict:
-            key = {key for key in self.data if self.data[key] == value}
+            key = {i for i in self.data if self.data[i] == value}
             if key != set():
                 return key
         return None
@@ -75,13 +76,13 @@ class Graph:
         if type(value) is UUID:
             for node in self.nodes:
                 if node.id == value:
-                    print(f"Info about node: {node.name}\n\nNode id: {node.id}")
-                    print(f"Node id: {node.id}")
+                    print(f"Info about node: {node.name}")
+                    print(f"Node id: {str(node.id)}")
                     print(
-                        f"Number of incoming edges: {len([edge for edge in self.edges if edge.toNode == value])}"
+                        f"Number of incoming edges: {str(sum(1 for edge in self.edges if edge.toNode == value))}"
                     )
                     print(
-                        f"Number of outgoing edges: {len([edge for edge in self.edges if edge.fromNode == value])}"
+                        f"Number of outgoing edges: {str(sum(1 for edge in self.edges if edge.fromNode == value))}"
                     )
                     if type(node.data) is dict:
                         print(f"Number of data values: {len(node.data)}")
@@ -101,12 +102,12 @@ class Graph:
             for node in self.nodes:
                 if node.name == value:
                     print(f"Info about node: {node.name}")
-                    print(f"Node id: {node.id}")
+                    print(f"Node id: {str(node.id)}")
                     print(
-                        f"Number of incoming edges: {len([edge for edge in self.edges if edge.toNode == value])}"
+                        f"Number of incoming edges: {str(sum(1 for edge in self.edges if edge.toNode == value))}"
                     )
                     print(
-                        f"Number of outgoing edges: {len([edge for edge in self.edges if edge.fromNode == value])}"
+                        f"Number of outgoing edges: {str(sum(1 for edge in self.edges if edge.fromNode == value))}"
                     )
                     if type(node.data) is dict:
                         print(f"Number of data values: {len(node.data)}")
@@ -137,7 +138,7 @@ class Graph:
             print(f"Number of unique edges: {len(edge_counter)}")
             # Проверяем, является ли количество рёбер в графе равным количеству возможных рёбер для полного графа
             print(
-                f"Is graph complete: {len(all_edges) == len(self.nodes) * (len(self.nodes) - 1)}"
+                f"Is graph complete: {str(len(all_edges) == len(self.nodes) * (len(self.nodes) - 1))}"
             )
 
     # ----------------------------------------------------------CRUD---------------------------------------------------------
@@ -145,36 +146,34 @@ class Graph:
     def addNode(self, node: Node):
         if len(self.nodes) != 0:
             for currNode in self.nodes:
-                if currNode.name != node.name:
-                    self.nodes.append(node)
-                    return node
-                else:
-                    raise Exception("Node name is exist")
-        else:
-            self.nodes.append(node)
-            return node
+                if currNode.name == node.name:
+                    raise Exception("Node name already exists")
+                if currNode.primary and node.primary:
+                    raise Exception("Both existing and new nodes are primary")
+        self.nodes.append(node)
+        return node
 
     def addEdge(self, edge: Edge):
         if len(self.edges) != 0:
             for currEdge in self.edges:
-                if currEdge.name != edge.name:
-                    self.edges.append(edge)
-                    return edge
-                else:
-                    raise Exception("Edge name is exist")
-        else:
-            self.edges.append(edge)
-            return edge
+                if currEdge.name == edge.name:
+                    raise Exception("Edge name already exists")
+        self.edges.append(edge)
+        return edge
 
-    def updateNode(self, currNode: Node, newNode: Node) -> bool:
-        for key, node in enumerate(self.nodes):
+    def updateNode(
+        self, currNode: Node, newNode: Node
+    ) -> bool:  # TODO:Add check on existing name and primary. Or totally rewrite
+        for i, node in enumerate(self.nodes):
             if node == currNode:
                 self.nodes[key] = newNode
                 return True
         return False
 
-    def updateEdge(self, currEdge: Edge, newEdge: Edge) -> bool:
-        for key, edge in enumerate(self.edges):
+    def updateEdge(
+        self, currEdge: Edge, newEdge: Edge
+    ) -> bool:  # TODO:Add check on existing name. Or totally rewrite
+        for i, edge in enumerate(self.edges):
             if edge == currEdge:
                 self.edges[key] = newEdge
                 return True
@@ -224,7 +223,8 @@ class Graph:
         keys = []
         for node in self.nodes:
             if type(node.data) is dict:
-                key = {key for key in node.data if node.data[key] == value}
+                key = {i for i in node.data if node.data[i] == value}
+
                 if key != set():
                     keys.append([node.id, node.name, key])
         return keys
@@ -352,9 +352,7 @@ class Graph:
         return cycles
 
     # Find the smallest weight path
-    def findDijkstraShortestPath(
-        self, start: Union[Node, UUID], end: Union[Node, UUID]
-    ):
+    def findDijkstraShortestPath(self, start: Union[Node, UUID], end: Union[Node, UUID]):
         start = start.id if type(start) == Node else start
         end = end.id if type(end) == Node else end
 
